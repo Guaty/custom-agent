@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+from google.genai import types
+
 
 def run_python_file(working_directory, file_path, args=None):
     try:
@@ -15,10 +17,16 @@ def run_python_file(working_directory, file_path, args=None):
             return f'Error: "{file_path}" is not a Python file'
         
         command = ["python", target_path]
-        if args is not None:
+        if args:
             command.extend(args)
 
-        completed_process = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        completed_process = subprocess.run(
+            command,
+            cwd=abs_working_dir,
+            capture_output=True, 
+            text=True, 
+            timeout=30
+        )
 
         output_str = []
         if completed_process.returncode != 0:
@@ -35,3 +43,25 @@ def run_python_file(working_directory, file_path, args=None):
     except Exception as e:
         return f"Error: executing Python file: {e}"
     
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Exceute the given Python file",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path of the file execute, relative to working directory"
+            ),
+            "args": types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(
+                    type=types.Type.STRING
+                ),
+                description="Arguments to pass to the file, optional"
+            ),
+        },
+        required=["file_path"]
+    ),
+)
