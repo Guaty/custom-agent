@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from config import MAX_ITERS
 from prompts import system_prompt
 from call_function import available_functions, call_function
 
@@ -27,48 +28,58 @@ def main():
     if args.verbose:
         print(f"User prompt: {args.user_prompt}\n")
     
-    generate_content(client, messages, args.verbose) 
+    for _ in range(MAX_ITERS):
+        try:
+            final_response = generate_content(client, messages, args.verbose)
+            if final_response:
+                print("Final response:")
+                print(final_response)
+                return
+        except Exception as e:
+            print(f"Error in generate_content: {e}")
+
+    print(f"Maximum iterations ({MAX_ITERS}) reached")
+    sys.exit(1)
 
 
 def generate_content(client, messages, verbose):
-    for _ in range(20):
-        response = client.models.generate_content(
-            model='gemini-2.5-flash', 
-            contents=messages,
-            config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt)
-        )
-        
-        if response.usage_metadata is None:
-            raise RuntimeError("Gemini API response appears to be malformed")
+    response = client.models.generate_content(
+        model='gemini-2.5-flash', 
+        contents=messages,
+        config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt)
+    )
+    
+    if response.usage_metadata is None:
+        raise RuntimeError("Gemini API response appears to be malformed")
+    
+    if verbose:
+        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
+    if response.candidates:
         for candidate in response.candidates:
-            messages.append(candidate.content)
+            if candidate.content:
+                messages.append(candidate.content)
+
+    if not response.function_calls:
+        print("Response:")
+        print(response.text)
+        return
+
+    function_results = []
+    for function_call in response.function_calls:
+        result = call_function(function_call, verbose)
+        if (
+            not result.parts
+            or not result.parts[0].function_response
+            or not result.parts[0].function_response.response
+        ):
+            raise RuntimeError(f"Empty function response for {function_call.name}")
         
+        function_results.append(result.parts[0])
         if verbose:
-            print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-            print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
-
-        if not response.function_calls:
-            print("Response:")
-            print(response.text)
-            return
-
-        function_results = []
-        for function_call in response.function_calls:
-            result = call_function(function_call, verbose)
-            if (
-                not result.parts
-                or not result.parts[0].function_response
-                or not result.parts[0].function_response.response
-            ):
-                raise RuntimeError(f"Empty function response for {function_call.name}")
-            
-            function_results.append(result.parts[0])
-            if verbose:
-                print(f"-> {result.parts[0].function_response.response}")
-        messages.append(types.Content(role="user", parts=function_results))
-
-    print("Max iterations reached: no final response")
-    sys.exit(1)
+            print(f"-> {result.parts[0].function_response.response}")
+    messages.append(types.Content(role="user", parts=function_results))
 
 
 if __name__ == "__main__":
