@@ -42,6 +42,14 @@ class TestCalculator(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.calculator.evaluate("+ 3")
 
+    def test_exponentiation(self):
+        result = self.calculator.evaluate("3 + 4 * 2 ^ 3")
+        self.assertEqual(result, 35)
+
+    def test_exponentiation_precedence(self):
+        result = self.calculator.evaluate("2 ^ 3 ^ 2") # right-to-left associativity
+        self.assertEqual(result, 512) # 2 ^ (3 ^ 2) = 2 ^ 9
+
 
 if __name__ == "__main__":
     unittest.main()

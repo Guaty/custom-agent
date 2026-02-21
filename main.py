@@ -62,9 +62,7 @@ def generate_content(client, messages, verbose):
                 messages.append(candidate.content)
 
     if not response.function_calls:
-        print("Response:")
-        print(response.text)
-        return
+        return response.text
 
     function_results = []
     for function_call in response.function_calls:
@@ -75,10 +73,10 @@ def generate_content(client, messages, verbose):
             or not result.parts[0].function_response.response
         ):
             raise RuntimeError(f"Empty function response for {function_call.name}")
-        
-        function_results.append(result.parts[0])
         if verbose:
             print(f"-> {result.parts[0].function_response.response}")
+        function_results.append(result.parts[0])
+    
     messages.append(types.Content(role="user", parts=function_results))
 
 
